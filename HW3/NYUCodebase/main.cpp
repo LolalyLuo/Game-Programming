@@ -6,6 +6,8 @@
  2. on the left corner is your current score, and on the right corner is your current life(start with 3)
  3. press left and right to move and press space to shoot (you can only shoot once per second)
  4. monsters will drop bullets randomly, you will lose one life if they hit you!
+ Note: I tried to not let dead monster drop bullet, but then it became really hard to pick a random alive monster, so the bullet could be droped
+ anywhere from that block of monster
  5. if you get touched by a monster or the monster went over you, you lose (to a game over screen)
  6. If you hit the extra SCARY monster, you will get 9999 more points!
  7. if you kill all the monsters, you WIN! (to a game win screen)
@@ -604,9 +606,6 @@ int main(int argc, char *argv[])
     glDisableVertexAttribArray(program.texCoordAttribute);
     for (int i = 0; i < monsters.size(); i++){
          delete monsters[i];
-    }
-    for (int i = 0; i < bad_bullet.size(); i++){
-        //delete &bad_bullet[i];
     }
     SDL_Quit();
     return 0;
