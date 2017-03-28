@@ -50,7 +50,7 @@ public:
         x = tx;
         y = ty;
         width = height = 0.15;
-        speed = 30;
+        speed = 4;
         direction_x = 1;
         direction_y = 0;
         dead = false;
@@ -89,6 +89,8 @@ GLuint logoID, up_bl, down_bl;
 float animationElapsed, bulletElasped, bl_timer_up;
 int score, state;
 bool start, win;
+GLuint asc;
+GLuint monster;
 
 
 GLuint LoadTexture(const char *filePath) {
@@ -165,7 +167,6 @@ void DrawSpriteSheetSprite(ShaderProgram *program, int index, int spriteCountX,
     glVertexAttribPointer(program->positionAttribute, 2, GL_FLOAT, false, 0, vertices);
     glVertexAttribPointer(program->texCoordAttribute, 2, GL_FLOAT, false, 0, texCoords);
     
-    GLuint monster  = LoadTexture(RESOURCE_FOLDER"sprite_mon.png");
     glBindTexture(GL_TEXTURE_2D, monster);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
@@ -199,7 +200,6 @@ void DrawText(ShaderProgram *program, std::string text, float size, float spacin
     
     glVertexAttribPointer(program->positionAttribute, 2, GL_FLOAT, false, 0, vertexData.data());
     glVertexAttribPointer(program->texCoordAttribute, 2, GL_FLOAT, false, 0, texCoordData.data());
-    GLuint asc  = LoadTexture(RESOURCE_FOLDER"asc.png");
     glBindTexture(GL_TEXTURE_2D, asc);
     glDrawArrays(GL_TRIANGLES, 0, vertexData.size()/2);
 }
@@ -209,7 +209,7 @@ void shootBullet(vector<Entity> &bad_bullet, float tx, float ty, float dy) {
     newBullet->x = tx; // where the bullet starts X
     newBullet->y = ty;     // where the bullet starts Y
     newBullet->direction_y = dy;
-    newBullet->speed = 70;
+    newBullet->speed = 11;
     newBullet->width = newBullet->height = 0.2;
     newBullet->dead = false;
     bad_bullet.push_back(*newBullet);
@@ -479,6 +479,8 @@ void Update(float elapsed, ShaderProgram& program, vector<Entity*> &monsters, ve
 void Initiate(ShaderProgram program, vector<Entity*> & monsters, vector<Entity> & bad_bullet){
     glEnableVertexAttribArray(program.positionAttribute);
     glEnableVertexAttribArray(program.texCoordAttribute);
+    asc  = LoadTexture(RESOURCE_FOLDER"asc.png");
+    monster  = LoadTexture(RESOURCE_FOLDER"sprite_mon.png");
 
     GLuint sailor_moonID  = LoadTexture(RESOURCE_FOLDER"sailor.png");
     up_bl  = LoadTexture(RESOURCE_FOLDER"moon.png");
@@ -489,11 +491,11 @@ void Initiate(ShaderProgram program, vector<Entity*> & monsters, vector<Entity> 
     sailor_moon.x = 0;
     sailor_moon.y = -3;
     sailor_moon.width = sailor_moon.height = 0.6;
-    sailor_moon.speed = 60;
+    sailor_moon.speed = 10;
     sailor_moon.dead = false;
     life = 3;
     counter = 0;
-    multiplier = 4;
+    multiplier = 0.5;
     bl_count = 0;
     bl_timer_up = 1.0/20;
     animationElapsed = 0;
