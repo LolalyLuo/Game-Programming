@@ -5,8 +5,6 @@
 
  
  TO DO:
- 1. Able to shoot
- 2. Music
  3. Better tilemap
  4. Make levels 
  5. Able to quit the game
@@ -84,12 +82,17 @@ void ProcessEvents(const SDL_Event& event, bool& done){
         } else if (event.key.keysym.scancode == SDL_SCANCODE_SPACE && state == STATE_GAME && player.collidedBottom == true){
             Mix_PlayChannel( -1, jumpS, 0);
             player.velocity_y = JUMP;
-            //jumpPE.Trigger();
+            jumpPE.Trigger();
             
         } else if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
             endGame = true;
+        }else if (event.key.keysym.scancode == SDL_SCANCODE_C && state == STATE_GAME){
+            Mix_PlayChannel( -1, shootS, 0);
+            shootBullet();
+            
+        }  else if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE && endGame == true){
+            done = true;
         }
-        
     }
 }
 
@@ -120,11 +123,25 @@ void Update(float elapsed){
         collisionEntity();
         
         for (int i = 0; i < enemies.size(); i++){
-            enemies[i].Update(elapsed);
-            collisionMap(enemies[i]);
-            
+            if (enemies[i].dead == false){
+                enemies[i].Update(elapsed);
+                collisionMap(enemies[i]);
+            }
         }
-        //jumpPE.Update(elapsed);
+        
+        for (int i =0; i < bullets.size(); i++){
+            if (bullets[i].dead ==false){
+                bullets[i].Update(elapsed);
+                collisionMap(bullets[i]);
+                for (int j = 0; j < enemies.size(); j++){
+                    if (if_collision(bullets[i], enemies[j])){
+                        enemies[j].dead = true;
+                        bullets[i].dead = true;
+                    }
+                }
+            }
+        }
+        jumpPE.Update(elapsed);
     }
     
 }
@@ -140,10 +157,14 @@ void Render(ShaderProgram& program, ShaderProgram& program2){
     
     switch(state){
         case STATE_START: {
+            glUseProgram(program.programID);
+            
             float vertices[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
             glVertexAttribPointer(program.positionAttribute, 2, GL_FLOAT, false, 0, vertices);
             float texCoords[] = {0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0};
             glVertexAttribPointer(program.texCoordAttribute, 2, GL_FLOAT, false, 0, texCoords);
+            glEnableVertexAttribArray(program.positionAttribute);
+            glEnableVertexAttribArray(program.texCoordAttribute);
             
             modelMatrix.identity();
             //modelMatrix.Translate(player.x, player.y, 0);
@@ -156,16 +177,20 @@ void Render(ShaderProgram& program, ShaderProgram& program2){
             modelMatrix.Translate(-3, -2, 0);
             program.setModelMatrix(modelMatrix);
             DrawText(&program, asc, "Press Space to Start!", 0.5f, -0.2f);
+            glDisableVertexAttribArray(program.positionAttribute);
+            glDisableVertexAttribArray(program.texCoordAttribute);
             break;}
             
             
             
         case STATE_GAME: {
+            glUseProgram(program.programID);
             float vertices[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
             glVertexAttribPointer(program.positionAttribute, 2, GL_FLOAT, false, 0, vertices);
             float texCoords[] = {0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0};
             glVertexAttribPointer(program.texCoordAttribute, 2, GL_FLOAT, false, 0, texCoords);
-            
+            glEnableVertexAttribArray(program.positionAttribute);
+            glEnableVertexAttribArray(program.texCoordAttribute);
             viewMatrix.identity();
             viewMatrix.Scale(1.5, 1.5, 1);
             viewMatrix.Translate(-player.x, -player.y, 0);
@@ -175,6 +200,8 @@ void Render(ShaderProgram& program, ShaderProgram& program2){
                                  0.0f);
             }
             program.setViewMatrix(viewMatrix);
+            viewMatrix2 = viewMatrix;
+            //program2.setViewMatrix(viewMatrix2);
             
             modelMatrix.identity();
             program.setModelMatrix(modelMatrix);
@@ -191,11 +218,12 @@ void Render(ShaderProgram& program, ShaderProgram& program2){
                     keys[i].Render(program);
                 }
             }
+            for (int i = 0; i < bullets.size(); i++){
+                if (bullets[i].dead == false ){
+                    bullets[i].Render(program);
+                }
+            }
             player.Render(program);
-            
-            //jumpPE.Render(program2);
-            glUseProgram(program.programID);
-            
             
             modelMatrix.identity();
             modelMatrix.Translate(player.x -4, player.y+2, 0);
@@ -216,26 +244,40 @@ void Render(ShaderProgram& program, ShaderProgram& program2){
                 glBindTexture(GL_TEXTURE_2D, lifeID);
                 glDrawArrays(GL_TRIANGLES, 0, 6);
             }
+
+            glDisableVertexAttribArray(program.positionAttribute);
+            glDisableVertexAttribArray(program.texCoordAttribute);
+            
+            //jumpPE.Render(program2);
+            glUseProgram(program.programID);
+            
+            
             
             break;}
             
         case STATE_GAME_OVER: {
+            glUseProgram(program.programID);
+            
             float vertices[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
             glVertexAttribPointer(program.positionAttribute, 2, GL_FLOAT, false, 0, vertices);
             float texCoords[] = {0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0};
             glVertexAttribPointer(program.texCoordAttribute, 2, GL_FLOAT, false, 0, texCoords);
+            glEnableVertexAttribArray(program.positionAttribute);
+            glEnableVertexAttribArray(program.texCoordAttribute);
             
             modelMatrix.identity();
             //modelMatrix.Translate(player.x, player.y, 0);
             modelMatrix.Scale(3, 3, 1);
             program.setModelMatrix(modelMatrix);
-            glBindTexture(GL_TEXTURE_2D, overID);
+            glBindTexture(GL_TEXTURE_2D, startID);
             glDrawArrays(GL_TRIANGLES, 0, 6);
             
             modelMatrix.identity();
             modelMatrix.Translate(-3, -2, 0);
             program.setModelMatrix(modelMatrix);
-            DrawText(&program, asc, "Try Again!!", 0.5f, -0.2f);
+            DrawText(&program, asc, "Press Space to Start!", 0.5f, -0.2f);
+            glDisableVertexAttribArray(program.positionAttribute);
+            glDisableVertexAttribArray(program.texCoordAttribute);
 
             break;}
             
@@ -246,16 +288,16 @@ void Render(ShaderProgram& program, ShaderProgram& program2){
 
 
 void Initiate(ShaderProgram program){
-    glEnableVertexAttribArray(program.positionAttribute);
-    glEnableVertexAttribArray(program.texCoordAttribute);
+    
     asc  = LoadTexture(RESOURCE_FOLDER"asc.png");
     ssID  = LoadTexture(RESOURCE_FOLDER"arne_sprites.png");
     pID = LoadTexture(RESOURCE_FOLDER"cute.png");
     startID = LoadTexture(RESOURCE_FOLDER"start.png");
     lifeID = LoadTexture(RESOURCE_FOLDER"life.png");
     overID = LoadTexture(RESOURCE_FOLDER"sad.png");
-    colorAttribute = glGetAttribLocation(program.programID, "color");
+    
     jumpP = LoadTexture(RESOURCE_FOLDER"star.png");
+    bulletID = LoadTexture(RESOURCE_FOLDER"moon.png");
     
     start = false;
     isSolid = {1, 2, 3, 4, 5, 6, 16, 17, 18, 19, 20, 32, 33, 34, 35, 36};
@@ -273,8 +315,8 @@ void Initiate(ShaderProgram program){
     music = Mix_LoadMUS("M.mp3");
 
     
-    //ParticleEmitter temp(2, PARTICLE_JUMP, player);
-    //jumpPE = temp;
+    ParticleEmitter temp(2, PARTICLE_JUMP, player);
+    jumpPE = temp;
     
     
     ifstream infile(RESOURCE_FOLDER"mymap.txt");
@@ -303,16 +345,11 @@ int main(int argc, char *argv[])
 
     ShaderProgram program(RESOURCE_FOLDER"vertex_textured.glsl", RESOURCE_FOLDER"fragment_textured.glsl");
     ShaderProgram program2(RESOURCE_FOLDER"vertex_textured2.glsl", RESOURCE_FOLDER"fragment_textured2.glsl");
-
+    
+    
     projectionMatrix.setOrthoProjection(-6.4f, 6.4f, -3.6f, 3.6f, -1.0f, 1.0f);
+    colorAttribute = glGetAttribLocation(program2.programID, "color");
     glUseProgram(program.programID);
-
-/*
-    levelData = new unsigned char*[LEVEL_HEIGHT];
-    for(int i = 0; i < LEVEL_HEIGHT; ++i) {
-        levelData[i] = new unsigned char[LEVEL_WIDTH];
-    }
-*/
 
     
     //initialize other variables
@@ -344,10 +381,19 @@ int main(int argc, char *argv[])
         program.setProjectionMatrix(projectionMatrix);
         program.setViewMatrix(viewMatrix);
         
+        program2.setModelMatrix(modelMatrix);
+        program2.setProjectionMatrix(projectionMatrix);
+        program2.setViewMatrix(viewMatrix);
+        
         player.collidedRight = player.collidedLeft = player.collidedBottom = player.collidedTop = false;
         for (int i = 0; i < enemies.size(); i++){
             if (enemies[i].dead == false){
                 enemies[i].collidedRight = enemies[i].collidedLeft = enemies[i].collidedBottom = enemies[i].collidedTop = false;
+            }
+        }
+        for (int i = 0; i < bullets.size(); i++){
+            if (bullets[i].dead == false ){
+                bullets[i].collidedRight = bullets[i].collidedLeft = bullets[i].collidedBottom = bullets[i].collidedTop = false;
             }
         }
         //set up background
@@ -367,11 +413,12 @@ int main(int argc, char *argv[])
     
     glDisableVertexAttribArray(program.positionAttribute);
     glDisableVertexAttribArray(program.texCoordAttribute);
+
     
     Mix_FreeChunk(jumpS);
     Mix_FreeChunk(coinS);
     Mix_FreeChunk(shootS);
-    //Mix_FreeMusic(music);
+    Mix_FreeMusic(music);
     SDL_Quit();
     return 0;
 }

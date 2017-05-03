@@ -19,6 +19,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <math.h>
+#include <cmath>
 #include <vector>
 #include <time.h>
 #include <string>
@@ -45,7 +46,7 @@ using namespace std;
 
 enum GameState { STATE_START, STATE_GAME, STATE_GAME_OVER, STATE_WIN};
 
-enum EntityType {ENTITY_PLAYER, ENTITY_ENEMY, ENTITY_KEY};
+enum EntityType {ENTITY_PLAYER, ENTITY_ENEMY, ENTITY_KEY, ENTITY_BULLET};
 
 
 SDL_Window* displayWindow;
@@ -53,13 +54,17 @@ float elapsed;
 Matrix projectionMatrix;
 Matrix modelMatrix;
 Matrix viewMatrix;
+
+Matrix projectionMatrix2;
+Matrix modelMatrix2;
+Matrix viewMatrix2;
 float angle, scale_x, scale_y;
 int life,score;
 int counter;
 bool start, endGame;
 int state;
 GLuint asc;
-GLuint ssID, pID, startID, lifeID, overID;
+GLuint ssID, pID, startID, lifeID, overID, bulletID;
 Mix_Chunk *jumpS;
 Mix_Chunk *coinS;
 Mix_Chunk *shootS;
@@ -72,6 +77,7 @@ float enemyBuffer;
 
 class Entity;
 bool collisionMapDot(Entity &player);
+bool if_collision (Entity& lhs, Entity& rhs);
 
 float lerp(float v0, float v1, float t) {
     return (1.0-t)*v0 + t*v1;
@@ -189,6 +195,16 @@ public:
             }
         } else if (entityType == ENTITY_KEY){
             
+        } else if (entityType == ENTITY_BULLET){
+            if (dead == false){
+                velocity_y += gravity * elapsed;
+                x += velocity_x * elapsed;
+                y += velocity_y * elapsed;
+                if (collidedLeft || collidedRight){
+                    dead = true;
+                }
+                
+            }
         }
     }
     void Render(ShaderProgram program){
@@ -233,6 +249,19 @@ public:
             modelMatrix.Scale(dir*(TILE_SIZE+0.1)*scale_x, (TILE_SIZE+0.1)*scale_y, 1);
             program.setModelMatrix(modelMatrix);
             DrawSpriteSheetSprite(&program, pID, index, 4, 4);
+        } else if (entityType == ENTITY_BULLET){
+            if (dead == false ){
+                float vertices[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
+                glVertexAttribPointer(program.positionAttribute, 2, GL_FLOAT, false, 0, vertices);
+                float texCoords[] = {0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0};
+                glVertexAttribPointer(program.texCoordAttribute, 2, GL_FLOAT, false, 0, texCoords);
+                modelMatrix.identity();
+                modelMatrix.Translate(x, y, 0);
+                modelMatrix.Scale(TILE_SIZE/3, TILE_SIZE/3, 1);
+                program.setModelMatrix(modelMatrix);
+                glBindTexture(GL_TEXTURE_2D, bulletID);
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
         }
     }
     float x;
@@ -255,14 +284,29 @@ public:
     bool collidedBottom;
     bool collidedLeft;
     bool collidedRight;
+    
 
 };
 
 
+
 vector<Entity> keys;
 vector<Entity> enemies;
+vector<Entity> bullets;
 Entity player;
 
+void shootBullet(){
+    Entity newBl;
+    newBl.dead = false;
+    newBl.entityType = ENTITY_BULLET;
+    newBl.acceleration_y = newBl.gravity = GRAVITY;
+    newBl.acceleration_x = 0;
+    newBl.velocity_x = 12 * (player.velocity_x / abs(player.velocity_x));
+    newBl.x = player.x;
+    newBl.y = player.y;
+    newBl.width = newBl.height = TILE_SIZE/3;
+    bullets.push_back(newBl);
+}
 
 GLuint LoadTexture(const char *filePath) {
     int w,h,comp;
@@ -553,6 +597,8 @@ public:
     float b;
     float a;
 };
+
+
 class Particle {
 public:
     Vector position;
@@ -582,6 +628,7 @@ public:
             velocityDeviation.y = 5;
             startSize = 1;
             endSize = 3;
+            sizeDeviation = 2;
             startColor = Color(1,0,0,1);
             endColor = Color(0,0,1,1);
             maxLifetime =2;
@@ -590,7 +637,7 @@ public:
                 Particle temp;
                 temp.position.x = position.x;
                 temp.position.y = position.y;
-                temp.lifetime = 3;
+                temp.lifetime = 0;
                 sizeDeviation = 3;
                 particles.push_back(temp);
             }
@@ -603,8 +650,10 @@ public:
     
     void Trigger(){
         for (int i = 0; i < particles.size(); i++){
-            particles[i].velocity.x = rand_FloatRange(velocity.x - velocityDeviation.x, velocity.x - velocityDeviation.x);
-            particles[i].velocity.y = rand_FloatRange(velocity.y - velocityDeviation.y, velocity.y - velocityDeviation.y);
+            particles[i].velocity.x = rand_FloatRange(velocity.x - velocityDeviation.x, velocity.x + velocityDeviation.x);
+            particles[i].velocity.y = rand_FloatRange(velocity.y - velocityDeviation.y, velocity.y + velocityDeviation.y);
+            particles[i].position.x = position.x;
+            particles[i].position.y = position.y;
             particles[i].lifetime = rand_FloatRange(0.0f, maxLifetime);
         }
     }
@@ -616,6 +665,7 @@ public:
                 particles[i].velocity.y += elapsed*gravity.y;
                 particles[i].position.x += elapsed*particles[i].velocity.x;
                 particles[i].position.y += elapsed*particles[i].velocity.y;
+                particles[i].lifetime += elapsed;
             }
         }
     }
@@ -633,13 +683,13 @@ public:
     float sizeDeviation;
     std::vector<Particle> particles;
     
-    void Render(ShaderProgram &program ){
-        glUseProgram(program.programID);
+    void Render(ShaderProgram &program2 ){
+        glUseProgram(program2.programID);
         vector<float> vertices;
         vector<float> texCoords;
         vector<float> colors;
         for(int i=0; i < particles.size(); i++) {
-            //if(particles[i].lifetime < maxLifetime){
+            if(particles[i].lifetime < maxLifetime){
                 float m = (particles[i].lifetime/maxLifetime);
                 float size = 0.1;//lerp(startSize, endSize, m) + particles[i].sizeDeviation;
                 
@@ -664,17 +714,24 @@ public:
                     colors.push_back(lerp(startColor.g, endColor.g, m));
                     colors.push_back(lerp(startColor.b, endColor.b, m));
                     colors.push_back(lerp(startColor.a, endColor.a, m));
-                } }
-        //}
-        glVertexAttribPointer(program.positionAttribute, 2, GL_FLOAT, false, 0, vertices.data());
-        glEnableVertexAttribArray(program.positionAttribute);
-        glVertexAttribPointer(colorAttribute, 4, GL_FLOAT, false, 0, colors.data());
-        glEnableVertexAttribArray(colorAttribute);
-        glVertexAttribPointer(program.texCoordAttribute, 2, GL_FLOAT, false, 0, texCoords.data());
-        glEnableVertexAttribArray(program.texCoordAttribute);
-        glBindTexture(GL_TEXTURE_2D, jumpP);
-        
-        glDrawArrays(GL_TRIANGLES, 0, vertices.size()/2);
+                }
+                modelMatrix2.identity();                
+                program2.setModelMatrix(modelMatrix2);
+                glVertexAttribPointer(program2.positionAttribute, 2, GL_FLOAT, false, 0, vertices.data());
+                glEnableVertexAttribArray(program2.positionAttribute);
+                glVertexAttribPointer(colorAttribute, 4, GL_FLOAT, false, 0, colors.data());
+                glEnableVertexAttribArray(colorAttribute);
+                glVertexAttribPointer(program2.texCoordAttribute, 2, GL_FLOAT, false, 0, texCoords.data());
+                glEnableVertexAttribArray(program2.texCoordAttribute);
+                glBindTexture(GL_TEXTURE_2D, jumpP);
+                glDrawArrays(GL_TRIANGLES, 0, vertices.size()/2);
+                
+                glDisableVertexAttribArray(program2.positionAttribute);
+                glDisableVertexAttribArray(program2.texCoordAttribute);
+                glDisableVertexAttribArray(colorAttribute);
+                
+            }
+        }
     }
 };
 
